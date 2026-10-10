@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
@@ -17,6 +18,9 @@ app.get("/", (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK" });
 });
+
+// Authentication routes
+app.use("/api/auth", authRoutes);
 
 // Handle unknown routes
 app.use((req, res) => {
