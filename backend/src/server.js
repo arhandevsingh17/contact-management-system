@@ -38,6 +38,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5001;
 
+// Validate essential environment configuration before startup
+if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
+  console.error("FATAL: JWT_SECRET environment variable is missing or blank.");
+  process.exit(1);
+}
+
 // Connect to MongoDB before starting the server
 mongoose
   .connect(process.env.MONGO_URI)
