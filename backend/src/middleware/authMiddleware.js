@@ -31,8 +31,8 @@ const authMiddleware = (req, res, next) => {
 
   const token = parts[1];
 
-  // Fail safely if JWT_SECRET is missing from server configuration
-  if (!process.env.JWT_SECRET) {
+  // Fail safely if JWT_SECRET is missing or blank in server configuration
+  if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
     const configError = new Error("JWT secret is not configured on the server");
     configError.status = 500;
     return next(configError);
@@ -64,7 +64,8 @@ const authMiddleware = (req, res, next) => {
     }
     if (
       error.name === "JsonWebTokenError" ||
-      error.name === "NotBeforeError"
+      error.name === "NotBeforeError" ||
+      error.name === "SyntaxError"
     ) {
       return res.status(401).json({ message: "Invalid token" });
     }
