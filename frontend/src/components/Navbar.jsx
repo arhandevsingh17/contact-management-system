@@ -45,10 +45,10 @@ export function Navbar() {
         <div className="navbar-actions">
           <div
             className="connection-indicator"
-            title={apiStatus.isDemoMode ? 'Running in Offline / Demo Storage mode' : `Connected to API at ${apiStatus.apiUrl}`}
+            title={`Connected to API at ${apiStatus.apiUrl}`}
           >
-            <span className={`status-dot ${apiStatus.isDemoMode ? 'demo' : 'online'}`} />
-            <span>{apiStatus.isDemoMode ? 'Demo Mode' : 'API Live'}</span>
+            <span className="status-dot online" />
+            <span>API Live</span>
           </div>
 
           {isAuthenticated ? (

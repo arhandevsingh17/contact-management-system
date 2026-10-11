@@ -21,7 +21,7 @@ export function SearchAndFilterBar({
           <input
             type="text"
             className="form-input search-field"
-            placeholder="Search by name, email, company, or notes..."
+            placeholder="Search by name, email, phone, or company..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             id="search-contacts-input"
