@@ -7,9 +7,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test src/__tests__/*.test.js",
-    "test:integration": "jest --runInBand --runTestsByPath tests/contact.test.js",
-    "test:all": "npm test && npm run test:integration",
-    "test:jest": "jest --runInBand --forceExit"
+    "test:integration": "node --test tests/contact.test.js",
+    "test:all": "npm test && npm run test:integration"
   },
   "keywords": [],
   "author": "",
@@ -24,17 +23,7 @@
     "mongoose": "^9.11.1"
   },
   "devDependencies": {
-    "jest": "^30.5.2",
     "mongodb-memory-server": "^11.3.0",
     "supertest": "^7.3.1"
-  },
-  "jest": {
-    "roots": [
-      "<rootDir>/tests"
-    ],
-    "testEnvironment": "node",
-    "setupFilesAfterEnv": [
-      "<rootDir>/tests/setup.js"
-    ]
   }
 }

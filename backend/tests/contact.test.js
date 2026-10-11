@@ -1,9 +1,59 @@
+const mongoose = require("mongoose");
+const { MongoMemoryServer } = require("mongodb-memory-server");
+
+const { test, describe, before, beforeEach, afterEach, after } = require("node:test");
+const assert = require("node:assert/strict");
+let mongoServer;
+
+before(async () => {
+  mongoServer = await MongoMemoryServer.create();
+  await mongoose.connect(mongoServer.getUri(), {
+    dbName: "contact_api_test",
+  });
+});
+
+afterEach(async () => {
+  for (const collection of Object.values(mongoose.connection.collections)) {
+    await collection.deleteMany({});
+  }
+});
+
+after(async () => {
+  if (mongoose.connection.readyState !== 0) {
+    await mongoose.disconnect();
+  }
+  if (mongoServer) await mongoServer.stop();
+});
+
+// Small Node-native replacements for the existing Jest-style assertions.
+function expect(actual) {
+  const matchers = {
+    toBe(expected) { assert.strictEqual(actual, expected); },
+    toEqual(expected) { assert.deepStrictEqual(actual, expected); },
+    toHaveLength(expected) { assert.strictEqual(actual.length, expected); },
+    toBeNull() { assert.strictEqual(actual, null); },
+    toBeNullOrUndefined() { assert.ok(actual == null); },
+  };
+  matchers.not = {
+    toBe(expected) { assert.notStrictEqual(actual, expected); },
+    toBeNull() { assert.notStrictEqual(actual, null); },
+  };
+  return matchers;
+}
+
+test.each = (rows) => (name, fn) => {
+  for (const row of rows) {
+    const args = Array.isArray(row) ? row : [row];
+    const label = name
+      .replace("%s", String(args[0]))
+      .replace("%j", JSON.stringify(args[0]));
+    test(label, () => fn(...args));
+  }
+};
 process.env.JWT_SECRET = "test-secret-for-automated-tests-only";
 
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
-
 const app = require("../src/app");
 const Contact = require("../src/models/Contact");
 
