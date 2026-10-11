@@ -1,0 +1,78 @@
+.stat-card-wrapper,
+.stats-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.stat-card {
+  flex: 1 1 160px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  background: var(--accent-bg, rgba(170, 59, 255, 0.08));
+  border: 1px solid var(--border, #e5e4e7);
+  transition: box-shadow 0.25s, transform 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow, 0 10px 15px -3px rgba(0,0,0,.1));
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.stat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-h, #08060d);
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: var(--text, #6b6375);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 500;
+}
+
+/* Skeleton loaders */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--border, #e5e4e7) 25%, #f3f3f3 50%, var(--border, #e5e4e7) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+.skeleton-value {
+  width: 56px;
+  height: 28px;
+  margin-bottom: 4px;
+}
+
+.skeleton-label {
+  width: 84px;
+  height: 13px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
