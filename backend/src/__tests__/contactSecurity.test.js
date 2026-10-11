@@ -37,7 +37,9 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 401);
-      assert.deepStrictEqual(res.body, { message: "Authorization token required" });
+      assert.deepStrictEqual(res.body, {
+        message: "Authorization token required",
+      });
     });
 
     it("GET /api/contacts should reject unauthenticated requests with 401", async () => {
@@ -47,7 +49,9 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 401);
-      assert.deepStrictEqual(res.body, { message: "Authorization token required" });
+      assert.deepStrictEqual(res.body, {
+        message: "Authorization token required",
+      });
     });
 
     it("GET /api/contacts/:id should reject unauthenticated requests with 401", async () => {
@@ -57,7 +61,9 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 401);
-      assert.deepStrictEqual(res.body, { message: "Authorization token required" });
+      assert.deepStrictEqual(res.body, {
+        message: "Authorization token required",
+      });
     });
 
     it("PUT /api/contacts/:id should reject unauthenticated requests with 401", async () => {
@@ -68,7 +74,9 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 401);
-      assert.deepStrictEqual(res.body, { message: "Authorization token required" });
+      assert.deepStrictEqual(res.body, {
+        message: "Authorization token required",
+      });
     });
 
     it("DELETE /api/contacts/:id should reject unauthenticated requests with 401", async () => {
@@ -78,7 +86,9 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 401);
-      assert.deepStrictEqual(res.body, { message: "Authorization token required" });
+      assert.deepStrictEqual(res.body, {
+        message: "Authorization token required",
+      });
     });
 
     it("should reject requests with invalid or expired tokens on contact routes", async () => {
@@ -102,6 +112,7 @@ describe("Contact Security and Cross-User Access Isolation", () => {
   describe("Cross-User Isolation and Ownership Enforcements", () => {
     it("POST /api/contacts must strictly set owner to authenticated user, ignoring client-supplied owner", async () => {
       let savedContactData = null;
+
       mock.method(Contact.prototype, "save", async function () {
         savedContactData = this;
         return this;
@@ -116,37 +127,41 @@ describe("Contact Security and Cross-User Access Isolation", () => {
           email: "alice@example.com",
           phone: "9876543210",
           company: "Acme Corp",
-          owner: USER_2_ID, // Attempting to set ownership to another user
+          owner: USER_2_ID,
         },
       });
 
       assert.strictEqual(res.status, 201);
       assert.notStrictEqual(savedContactData, null);
-      assert.strictEqual(
-        String(savedContactData.owner),
-        USER_1_ID,
-        "Contact owner must be forced to authenticated user ID"
-      );
-      assert.notStrictEqual(
-        String(savedContactData.owner),
-        USER_2_ID,
-        "Client must not be able to assign contact ownership to another user"
-      );
+      assert.strictEqual(String(savedContactData.owner), USER_1_ID);
+      assert.notStrictEqual(String(savedContactData.owner), USER_2_ID);
     });
 
-    it("GET /api/contacts must scope queries strictly to { owner: req.user.id }", async () => {
+    it("GET /api/contacts must scope queries strictly to the authenticated user", async () => {
       let queriedFilter = null;
-      mock.method(Contact, "find", async (filter) => {
+
+      mock.method(Contact, "find", (filter) => {
         queriedFilter = filter;
-        return [
-          {
-            _id: CONTACT_1_ID,
-            name: "User1 Contact",
-            phone: "1112223333",
-            owner: USER_1_ID,
+
+        return {
+          sort() {
+            return this;
           },
-        ];
+          skip() {
+            return this;
+          },
+          limit: async () => [
+            {
+              _id: CONTACT_1_ID,
+              name: "User1 Contact",
+              phone: "1112223333",
+              owner: USER_1_ID,
+            },
+          ],
+        };
       });
+
+      mock.method(Contact, "countDocuments", async () => 1);
 
       const res = await makeRequest(app, {
         method: "GET",
@@ -156,18 +171,20 @@ describe("Contact Security and Cross-User Access Isolation", () => {
 
       assert.strictEqual(res.status, 200);
       assert.deepStrictEqual(queriedFilter, { owner: USER_1_ID });
-      assert.strictEqual(res.body.length, 1);
-      assert.strictEqual(res.body[0].name, "User1 Contact");
+      assert.strictEqual(res.body.contacts.length, 1);
+      assert.strictEqual(res.body.contacts[0].name, "User1 Contact");
     });
 
     it("GET /api/contacts/:id must return 404 when requesting another user's contact", async () => {
       let searchedQuery = null;
+
       mock.method(Contact, "findOne", async (query) => {
         searchedQuery = query;
-        // Simulating that CONTACT_2_ID belongs to USER_2_ID, so finding with owner: USER_1_ID yields null
+
         if (query._id === CONTACT_2_ID && query.owner === USER_1_ID) {
           return null;
         }
+
         return { _id: query._id, owner: query.owner };
       });
 
@@ -186,10 +203,7 @@ describe("Contact Security and Cross-User Access Isolation", () => {
     });
 
     it("PUT /api/contacts/:id must return 404 when attempting to update another user's contact", async () => {
-      mock.method(Contact, "findOne", async (query) => {
-        // Query will include owner: req.user.id; if it belongs to USER_2_ID, query returns null
-        return null;
-      });
+      mock.method(Contact, "findOne", async () => null);
 
       const res = await makeRequest(app, {
         method: "PUT",
@@ -202,23 +216,11 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       assert.deepStrictEqual(res.body, { message: "Contact not found" });
     });
 
-    it("PUT /api/contacts/:id must prevent modifying contact ownership", async () => {
-      let saveCalled = false;
-      const contactDoc = {
-        _id: CONTACT_1_ID,
-        name: "Legit Contact",
-        phone: "5555555555",
-        owner: USER_1_ID,
-        save: async function () {
-          saveCalled = true;
-          return this;
-        },
-      };
+    it("PUT /api/contacts/:id must reject attempts to modify contact ownership", async () => {
+      let findOneCalled = false;
 
-      mock.method(Contact, "findOne", async (query) => {
-        if (query._id === CONTACT_1_ID && query.owner === USER_1_ID) {
-          return contactDoc;
-        }
+      mock.method(Contact, "findOne", async () => {
+        findOneCalled = true;
         return null;
       });
 
@@ -228,25 +230,22 @@ describe("Contact Security and Cross-User Access Isolation", () => {
         headers: { authorization: `Bearer ${user1Token}` },
         body: {
           name: "Updated Contact Name",
-          owner: USER_2_ID, // Attempt to transfer ownership
+          owner: USER_2_ID,
         },
       });
 
-      assert.strictEqual(res.status, 200);
-      assert.strictEqual(saveCalled, true);
-      assert.strictEqual(contactDoc.name, "Updated Contact Name");
-      assert.strictEqual(
-        contactDoc.owner,
-        USER_1_ID,
-        "Contact owner must remain USER_1_ID despite client payload"
-      );
+      assert.strictEqual(res.status, 400);
+      assert.strictEqual(findOneCalled, false);
+      assert.deepStrictEqual(res.body, {
+        message: "Request contains unsupported fields",
+      });
     });
 
     it("DELETE /api/contacts/:id must return 404 when attempting to delete another user's contact", async () => {
       let queriedDelete = null;
+
       mock.method(Contact, "findOneAndDelete", async (query) => {
         queriedDelete = query;
-        // Contact belongs to USER_2_ID, so query scoped to USER_1_ID finds nothing
         return null;
       });
 
@@ -269,6 +268,7 @@ describe("Contact Security and Cross-User Access Isolation", () => {
         if (query._id === CONTACT_1_ID && query.owner === USER_1_ID) {
           return { _id: CONTACT_1_ID, owner: USER_1_ID };
         }
+
         return null;
       });
 
@@ -279,11 +279,17 @@ describe("Contact Security and Cross-User Access Isolation", () => {
       });
 
       assert.strictEqual(res.status, 200);
-      assert.deepStrictEqual(res.body, { message: "Contact deleted successfully" });
+      assert.deepStrictEqual(res.body, {
+        message: "Contact deleted successfully",
+      });
     });
 
     it("should return 400 for invalid contact ID format on GET, PUT, and DELETE", async () => {
-      const invalidIds = ["123", "not-a-valid-hex-id", "507f1f77bcf86cd79943901z"];
+      const invalidIds = [
+        "123",
+        "not-a-valid-hex-id",
+        "507f1f77bcf86cd79943901z",
+      ];
 
       for (const id of invalidIds) {
         const getRes = await makeRequest(app, {
@@ -291,8 +297,11 @@ describe("Contact Security and Cross-User Access Isolation", () => {
           url: `/api/contacts/${id}`,
           headers: { authorization: `Bearer ${user1Token}` },
         });
+
         assert.strictEqual(getRes.status, 400);
-        assert.deepStrictEqual(getRes.body, { message: "Invalid contact ID" });
+        assert.deepStrictEqual(getRes.body, {
+          message: "Invalid contact ID",
+        });
 
         const putRes = await makeRequest(app, {
           method: "PUT",
@@ -300,16 +309,22 @@ describe("Contact Security and Cross-User Access Isolation", () => {
           headers: { authorization: `Bearer ${user1Token}` },
           body: { name: "Valid Name" },
         });
+
         assert.strictEqual(putRes.status, 400);
-        assert.deepStrictEqual(putRes.body, { message: "Invalid contact ID" });
+        assert.deepStrictEqual(putRes.body, {
+          message: "Invalid contact ID",
+        });
 
         const delRes = await makeRequest(app, {
           method: "DELETE",
           url: `/api/contacts/${id}`,
           headers: { authorization: `Bearer ${user1Token}` },
         });
+
         assert.strictEqual(delRes.status, 400);
-        assert.deepStrictEqual(delRes.body, { message: "Invalid contact ID" });
+        assert.deepStrictEqual(delRes.body, {
+          message: "Invalid contact ID",
+        });
       }
     });
   });
