@@ -4,6 +4,12 @@ const Contact = require("../models/Contact");
 // Create a contact
 const createContact = async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+      return res.status(400).json({
+        message: "Request body must be a valid JSON object"
+      });
+    }
+
     const { name, email, phone, company } = req.body;
 
     if (
@@ -92,6 +98,12 @@ const getContact = async (req, res) => {
 // Update a contact belonging to the logged-in user
 const updateContact = async (req, res) => {
   try {
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+      return res.status(400).json({
+        message: "Request body must be a valid JSON object"
+      });
+    }
+
     const { id } = req.params;
 
     if (!/^[0-9a-fA-F]{24}$/.test(id)) {
