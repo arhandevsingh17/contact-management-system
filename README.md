@@ -7,7 +7,7 @@ A secure contact management REST API with JWT authentication, role-based access 
 - Node.js and Express
 - MongoDB and Mongoose
 - JWT authentication and `bcryptjs`
-- Jest, Supertest, and MongoDB Memory Server for Issue #7 API tests
+- Node.js built-in test runner (`node:test`), Supertest, and MongoDB Memory Server for Issue #7 API tests
 - Node.js built-in test runner for authentication and security tests
 
 ## Setup
@@ -131,7 +131,7 @@ Run Issue #7 API tests from the `backend` directory:
 npm test
 ```
 
-This command uses Jest and Supertest, configured to run serially with `--runInBand`. The Issue #7 test suite uses MongoDB Memory Server for isolated database testing.
+This command runs the unit and security tests using Node.js's built-in test runner (`node:test`). Run `npm run test:integration` for the Issue #7 contact API integration tests, or `npm run test:all` to run both suites. The integration tests use Supertest and MongoDB Memory Server for isolated database testing.
 
 ### Authentication and Security Test Coverage
 
