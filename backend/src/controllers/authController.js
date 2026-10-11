@@ -94,14 +94,21 @@ const login = async (req, res, next) => {
     const { email, password } = req.body || {};
 
     // Validate required fields
-    if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+    if (
+      !email ||
+      !password ||
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      !email.trim() ||
+      !password.trim()
+    ) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
 
     // Check for missing server JWT_SECRET configuration
-    if (!process.env.JWT_SECRET) {
+    if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
       const configError = new Error("JWT secret is not configured on the server");
       configError.status = 500;
       return next(configError);
