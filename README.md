@@ -11,7 +11,7 @@ A secure full-stack contact management application with JWT authentication, role
 - **Fail-Safe Server Configuration**: Validates `process.env.JWT_SECRET` presence and non-whitespace content in server bootstrap, authentication middleware, and authentication controllers. If missing or blank, the system fails closed with HTTP 500 without processing tokens.
 - **Signature & Tamper Verification**: Verifies HMAC SHA-256 signatures; rejects tampered or expired tokens with HTTP 401.
 - **Payload Schema Validation**: Requires valid 24-character hexadecimal MongoDB ObjectIds for user `id` and permits only whitelisted roles (`User`, `Admin`).
-- **Resilient Parsing**: Traps `SyntaxError` from corrupted or malformed base64 JSON token payloads as HTTP 401 instead of crashing or leaking server 500 errors.
+- **Resilient Parsing**: Traps `SyntaxError` (which occurs when decoding malformed JSON payloads in tokens configured with `typ: 'JWT'` or when JSON decoders encounter unparseable input) as HTTP 401 instead of crashing or leaking server 500 errors.
 
 ### 2. User Registration & Login Defenses
 - **Input Sanitization**: Requires non-empty, trimmed strings for name, email, and password. Validates email against standard syntax regex.
@@ -41,6 +41,9 @@ A secure full-stack contact management application with JWT authentication, role
 
 The backend utilizes Node.js's built-in test runner (`node:test` and `node:assert`). No third-party test dependencies or external services are required.
 
+> [!NOTE]
+> **Testing Environment & Limitations**: The automated test suite executes fully in-memory using Node.js standard streams (`stream.Readable`, `http.ServerResponse`) and mock implementations for database queries. Live MongoDB Atlas connectivity and active external network sockets were not verified during automated test execution.
+
 ### Running Backend Tests
 
 Navigate to the `backend` directory and run:
@@ -61,7 +64,9 @@ node --test
 - **`src/__tests__/jwtValidation.test.js`**:
   - Missing, non-string, or malformed `Authorization` headers (HTTP 401).
   - Missing or blank server `JWT_SECRET` fail-safe (HTTP 500).
-  - Invalid signature, tampered tokens, corrupted payloads (`SyntaxError`), and expired tokens (HTTP 401).
+  - Invalid signature, expired tokens (`TokenExpiredError`), and structural malformations (`JsonWebTokenError`) (HTTP 401).
+  - Direct execution of the `SyntaxError` handling branch via targeted test double stubbing (HTTP 401).
+  - Natural `SyntaxError` handling for tokens with `typ: 'JWT'` headers and unparseable JSON payloads (HTTP 401).
   - Payload schema validation (invalid ObjectId format, unknown roles) (HTTP 401).
   - Verified user identity attachment (`req.user = { id, role }`).
 - **`src/__tests__/authSecurity.test.js`**:

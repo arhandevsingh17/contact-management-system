@@ -1,5 +1,6 @@
-const { describe, it, beforeEach, afterEach } = require("node:test");
+const { describe, it, beforeEach, afterEach, mock } = require("node:test");
 const assert = require("node:assert");
+const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
 const authMiddleware = require("../middleware/authMiddleware");
 const {
@@ -19,6 +20,7 @@ describe("JWT Validation and Authentication Middleware", () => {
 
   afterEach(() => {
     process.env.JWT_SECRET = originalSecret;
+    mock.reset();
   });
 
   describe("Authorization Header Validation", () => {
@@ -150,8 +152,8 @@ describe("JWT Validation and Authentication Middleware", () => {
       assert.deepStrictEqual(res._body, { message: "Invalid token" });
     });
 
-    it("should return 401 when token is completely corrupted/tampered", () => {
-      const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.corrupted.signature";
+    it("should return 401 when token is structurally malformed (JsonWebTokenError)", () => {
+      const token = "not.a.valid.jwt.structure";
       const { req, res } = createMockReqRes({
         headers: { authorization: `Bearer ${token}` },
       });
@@ -162,6 +164,63 @@ describe("JWT Validation and Authentication Middleware", () => {
       });
 
       assert.strictEqual(nextCalled, false);
+      assert.strictEqual(res.statusCode, 401);
+      assert.deepStrictEqual(res._body, { message: "Invalid token" });
+    });
+
+    it("should return 401 when jwt.verify throws a SyntaxError (directly exercising SyntaxError error branch)", (t) => {
+      t.mock.method(jwt, "verify", () => {
+        throw new SyntaxError("Unexpected token in JSON at position 0");
+      });
+
+      const { req, res } = createMockReqRes({
+        headers: { authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid.signature" },
+      });
+      let nextCalled = false;
+      let passedError = null;
+
+      authMiddleware(req, res, (err) => {
+        nextCalled = true;
+        passedError = err;
+      });
+
+      assert.strictEqual(nextCalled, false, "next(err) must not be called when SyntaxError is caught");
+      assert.strictEqual(passedError, null);
+      assert.strictEqual(res.statusCode, 401);
+      assert.deepStrictEqual(res._body, { message: "Invalid token" });
+    });
+
+    it("should return 401 when token with typ: 'JWT' has a non-JSON payload (natural SyntaxError from jsonwebtoken)", () => {
+      // jsonwebtoken (via jws) only attempts JSON.parse on payload when header.typ === 'JWT'.
+      // Construct a token with a valid HS256 signature, typ: 'JWT', and an unparseable JSON payload.
+      const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+      const unparseablePayload = Buffer.from("not-valid-json{").toString("base64url");
+      const signingInput = `${header}.${unparseablePayload}`;
+      const validSignature = crypto
+        .createHmac("sha256", TEST_JWT_SECRET)
+        .update(signingInput)
+        .digest("base64url");
+      const token = `${signingInput}.${validSignature}`;
+
+      // Verify that jsonwebtoken naturally throws a native SyntaxError for this exact token
+      assert.throws(
+        () => jwt.verify(token, TEST_JWT_SECRET),
+        (err) => err instanceof SyntaxError
+      );
+
+      const { req, res } = createMockReqRes({
+        headers: { authorization: `Bearer ${token}` },
+      });
+      let nextCalled = false;
+      let passedError = null;
+
+      authMiddleware(req, res, (err) => {
+        nextCalled = true;
+        passedError = err;
+      });
+
+      assert.strictEqual(nextCalled, false, "authMiddleware must handle SyntaxError internally without delegating to next(err)");
+      assert.strictEqual(passedError, null);
       assert.strictEqual(res.statusCode, 401);
       assert.deepStrictEqual(res._body, { message: "Invalid token" });
     });
