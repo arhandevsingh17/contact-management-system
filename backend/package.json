@@ -7,8 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test src/__tests__/*.test.js",
-    "test:integration": "jest --runInBand --forceExit",
-    "test:all": "npm test && npm run test:integration"
+    "test:integration": "jest --runInBand --runTestsByPath tests/contact.test.js",
+    "test:all": "npm test && npm run test:integration",
+    "test:jest": "jest --runInBand --forceExit"
   },
   "keywords": [],
   "author": "",
@@ -28,8 +29,12 @@
     "supertest": "^7.3.1"
   },
   "jest": {
-    "roots": ["<rootDir>/tests"],
+    "roots": [
+      "<rootDir>/tests"
+    ],
     "testEnvironment": "node",
-    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"]
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ]
   }
 }
