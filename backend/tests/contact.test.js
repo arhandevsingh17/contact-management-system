@@ -1,4 +1,5 @@
 process.env.JWT_SECRET = "test-secret-for-automated-tests-only";
+
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
@@ -131,7 +132,9 @@ describe("List, search, filter and pagination", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.contacts).toHaveLength(2);
-    expect(response.body.contacts.every(c => c.company === "Google")).toBe(true);
+    expect(
+      response.body.contacts.every((contact) => contact.company === "Google")
+    ).toBe(true);
   });
 
   test("combines search and company filters", async () => {
@@ -150,7 +153,7 @@ describe("List, search, filter and pagination", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.contacts.map(c => c.name)).toEqual([
+    expect(response.body.contacts.map((contact) => contact.name)).toEqual([
       "Aarav Sharma",
       "Meera Singh",
       "Rohan Verma",
@@ -260,6 +263,7 @@ describe("Read, update and delete contacts", () => {
       .send({ name: "Hijacked" });
 
     expect(response.status).toBe(404);
+
     const unchanged = await Contact.findById(contact._id);
     expect(unchanged.name).toBe("Kabir Khan");
   });
