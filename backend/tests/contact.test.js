@@ -207,7 +207,7 @@ describe("Read, update and delete contacts", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.contact.name).toBe("Kabir Khan");
+    expect(response.body.name).toBe("Kabir Khan");
   });
 
   test("does not allow reading another user's contact", async () => {
