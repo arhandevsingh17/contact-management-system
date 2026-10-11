@@ -14,8 +14,29 @@ export default defineConfig([
       reactRefresh.configs.vite,
     ],
     languageOptions: {
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+        // Vitest globals (describe, it, expect, vi, beforeEach, afterEach, …)
+        ...globals.node,
+      },
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  },
+  // Test files – allow Vitest describe/it/expect as globals
+  {
+    files: ['src/test/**/*.{js,jsx}', '**/*.test.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        describe: 'readonly',
+        it:       'readonly',
+        expect:   'readonly',
+        vi:       'readonly',
+        beforeEach: 'readonly',
+        afterEach:  'readonly',
+        beforeAll:  'readonly',
+        afterAll:   'readonly',
+      },
     },
   },
 ])
