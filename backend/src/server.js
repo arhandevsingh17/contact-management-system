@@ -3,31 +3,34 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 const authRoutes = require("./routes/authRoutes");
+const contactRoutes = require("./routes/contactRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// Root route
+
 app.get("/", (req, res) => {
   res.json({ message: "Contact Management API is running" });
 });
 
-// Health check
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK" });
 });
 
-// Authentication routes
+
 app.use("/api/auth", authRoutes);
 
-// Handle unknown routes
+app.use("/api/contacts", contactRoutes);
+
+
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
 
-// Centralized error handler
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
 
@@ -44,7 +47,7 @@ if (!process.env.JWT_SECRET || !process.env.JWT_SECRET.trim()) {
   process.exit(1);
 }
 
-// Connect to MongoDB before starting the server
+
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
