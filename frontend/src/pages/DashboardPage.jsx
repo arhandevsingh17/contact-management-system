@@ -21,12 +21,18 @@ export const DashboardPage = () => {
   const [contactToDelete, setContactToDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
+  const extractContacts = (data) => {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.contacts)) return data.contacts;
+    return [];
+  };
+
   const fetchContacts = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const data = await contactService.getContacts();
-      setContacts(Array.isArray(data) ? data : []);
+      setContacts(extractContacts(data));
     } catch (err) {
       setError(err.message || 'Failed to load contacts');
     } finally {
@@ -40,7 +46,7 @@ export const DashboardPage = () => {
       try {
         const data = await contactService.getContacts();
         if (isMounted) {
-          setContacts(Array.isArray(data) ? data : []);
+          setContacts(extractContacts(data));
         }
       } catch (err) {
         if (isMounted) {
