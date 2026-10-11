@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "jest --runInBand"
+    "test": "node --test src/__tests__/*.test.js",
+    "test:integration": "jest --runInBand --forceExit",
+    "test:all": "npm test && npm run test:integration"
   },
   "keywords": [],
   "author": "",
@@ -26,9 +28,8 @@
     "supertest": "^7.3.1"
   },
   "jest": {
+    "roots": ["<rootDir>/tests"],
     "testEnvironment": "node",
-    "setupFilesAfterEnv": [
-      "<rootDir>/tests/setup.js"
-    ]
+    "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"]
   }
 }
