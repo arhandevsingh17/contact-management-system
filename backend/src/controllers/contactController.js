@@ -6,7 +6,12 @@ const createContact = async (req, res) => {
   try {
     const { name, email, phone, company } = req.body;
 
-    if (!name || !phone) {
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof phone !== "string" ||
+      !phone.trim()
+    ) {
       return res.status(400).json({
         message: "Name and phone are required"
       });
@@ -22,7 +27,7 @@ const createContact = async (req, res) => {
 
     await contact.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Contact created successfully",
       contact
     });
@@ -33,28 +38,28 @@ const createContact = async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error"
     });
   }
 };
 
-// Get all contacts of the logged-in user
+// Get all contacts belonging to the logged-in user
 const getContacts = async (req, res) => {
   try {
     const contacts = await Contact.find({
       owner: req.user.id
     });
 
-    res.status(200).json(contacts);
+    return res.status(200).json(contacts);
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error"
     });
   }
 };
 
-// Get one contact
+// Get one contact belonging to the logged-in user
 const getContact = async (req, res) => {
   try {
     const { id } = req.params;
@@ -76,15 +81,15 @@ const getContact = async (req, res) => {
       });
     }
 
-    res.status(200).json(contact);
+    return res.status(200).json(contact);
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error"
     });
   }
 };
 
-// Update a contact
+// Update a contact belonging to the logged-in user
 const updateContact = async (req, res) => {
   try {
     const { id } = req.params;
@@ -108,7 +113,7 @@ const updateContact = async (req, res) => {
       });
     }
 
-       if (
+    if (
       (name !== undefined &&
         (typeof name !== "string" || !name.trim())) ||
       (phone !== undefined &&
@@ -137,7 +142,7 @@ const updateContact = async (req, res) => {
 
     await contact.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Contact updated successfully",
       contact
     });
@@ -148,13 +153,13 @@ const updateContact = async (req, res) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error"
     });
   }
 };
 
-// Delete a contact
+// Delete a contact belonging to the logged-in user
 const deleteContact = async (req, res) => {
   try {
     const { id } = req.params;
@@ -176,11 +181,11 @@ const deleteContact = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Contact deleted successfully"
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error"
     });
   }
