@@ -1,4 +1,8 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace(/\/+$/, '');
+const API_BASE_URL = (
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
+  (typeof globalThis !== 'undefined' && globalThis.process && globalThis.process.env && globalThis.process.env.VITE_API_URL) ||
+  'http://localhost:5001/api'
+).replace(/\/+$/, '');
 
 const TOKEN_KEY = 'cms_token';
 const USER_KEY = 'cms_user';

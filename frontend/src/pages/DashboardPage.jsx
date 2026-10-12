@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { contactService } from '../services/api';
 import { ContactModal } from '../components/ContactModal';
+import {
+  extractContacts,
+  filterContacts,
+  getUniqueCompanies,
+} from '../utils/contactHelpers';
 
 export const DashboardPage = () => {
   const [contacts, setContacts] = useState([]);
@@ -20,12 +25,6 @@ export const DashboardPage = () => {
   // Delete confirmation state
   const [contactToDelete, setContactToDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
-
-  const extractContacts = (data) => {
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.contacts)) return data.contacts;
-    return [];
-  };
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -73,32 +72,12 @@ export const DashboardPage = () => {
 
   // Distinct company list for filter dropdown
   const uniqueCompanies = useMemo(() => {
-    const set = new Set();
-    contacts.forEach((c) => {
-      if (c.company && c.company.trim()) {
-        set.add(c.company.trim());
-      }
-    });
-    return Array.from(set).sort();
+    return getUniqueCompanies(contacts);
   }, [contacts]);
 
   // Filtered contacts based on search and company filter
   const filteredContacts = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    return contacts.filter((contact) => {
-      const matchesSearch =
-        !query ||
-        (contact.name && contact.name.toLowerCase().includes(query)) ||
-        (contact.email && contact.email.toLowerCase().includes(query)) ||
-        (contact.phone && contact.phone.toLowerCase().includes(query)) ||
-        (contact.company && contact.company.toLowerCase().includes(query));
-
-      const matchesCompany =
-        !companyFilter ||
-        (contact.company && contact.company.trim() === companyFilter);
-
-      return matchesSearch && matchesCompany;
-    });
+    return filterContacts(contacts, searchQuery, companyFilter);
   }, [contacts, searchQuery, companyFilter]);
 
   const handleOpenAdd = () => {
