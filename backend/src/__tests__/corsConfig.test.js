@@ -48,25 +48,27 @@ test("CORS allows requests without an Origin header", async () => {
   assert.equal(await checkOrigin({ NODE_ENV: "production" }, undefined), true);
 });
 
-test("production startup requires a configured public HTTPS frontend origin", () => {
+test("production startup requires a configured deployed HTTPS frontend hostname", () => {
   assert.throws(
     () => validateCorsConfig({ NODE_ENV: "production" }),
     /FRONTEND_ORIGIN is required in production/
   );
-  assert.throws(
-    () => validateCorsConfig({
-      NODE_ENV: "production",
-      FRONTEND_ORIGIN: "http://contacts.example.com",
-    }),
-    /public HTTPS origin/
-  );
-  assert.throws(
-    () => validateCorsConfig({
-      NODE_ENV: "production",
-      FRONTEND_ORIGIN: "https://localhost:5173",
-    }),
-    /public HTTPS origin/
-  );
+  for (const origin of [
+    "http://contacts.example.com",
+    "https://localhost:5173",
+    "https://127.0.0.1",
+    "https://192.0.2.10",
+    "https://[::1]",
+  ]) {
+    assert.throws(
+      () => validateCorsConfig({
+        NODE_ENV: "production",
+        FRONTEND_ORIGIN: origin,
+      }),
+      /deployed HTTPS hostname/
+    );
+  }
+
   assert.deepEqual(
     validateCorsConfig({
       NODE_ENV: "production",
