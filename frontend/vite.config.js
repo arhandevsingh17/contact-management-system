@@ -1,7 +1,12 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react';
+import { loadEnv, defineConfig } from 'vite';
+import { validateProductionApiUrl } from './src/utils/apiUrlConfig.js';
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
-})
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  validateProductionApiUrl(mode, env);
+
+  return {
+    plugins: [react()],
+  };
+});
