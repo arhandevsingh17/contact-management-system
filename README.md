@@ -1,39 +1,127 @@
 # Contact Management System
 
-A secure contact management REST API with JWT authentication, role-based access control (RBAC), and user-isolated contact management.
+A full-stack contact management application with a React frontend, Express REST API, JWT authentication, role-based access control (RBAC), and user-isolated contacts.
 
 ## Tech Stack
 
+- React, Vite, and React Router
 - Node.js and Express
 - MongoDB and Mongoose
 - JWT authentication and `bcryptjs`
-- Node.js built-in test runner (`node:test`), Supertest, and MongoDB Memory Server for Issue #7 API tests
-- Node.js built-in test runner for authentication and security tests
+- Node.js built-in test runner (`node:test`), Supertest, and MongoDB Memory Server
 
-## Setup
+## Prerequisites
 
-1. Install dependencies:
+- Node.js compatible with the versions declared by the frontend and backend dependencies
+- npm
+- MongoDB Atlas for deployment, or a local MongoDB instance for development
+- Git
 
-   ```bash
-   cd backend
-   npm install
-   ```
+## Repository Structure
 
-2. Create `backend/.env` using `backend/.env.example` as a reference:
+- `backend/`: Express API, authentication, contact routes/models, and backend tests
+- `frontend/`: React/Vite application, pages, API services, and frontend tests
 
-   ```env
-   PORT=5001
-   MONGO_URI=your_mongodb_connection_string
-   JWT_SECRET=your_secure_secret
-   ```
+## Local Development
 
-3. Start the backend:
+### 1. Configure and start the backend
 
-   ```bash
-   npm run dev
-   ```
+From the repository root:
 
-The API runs on `http://localhost:5001` by default.
+```bash
+cd backend
+npm install
+cp .env.example .env
+```
+
+Edit `backend/.env` and set:
+
+```env
+PORT=5001
+MONGO_URI=your_local_or_atlas_mongodb_connection_string
+JWT_SECRET=replace_with_a_long_random_secret
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+Use a unique, strong secret in your own environment. Do not commit `.env` files or real credentials.
+
+Start the backend:
+
+```bash
+npm run dev
+```
+
+The API listens on `http://localhost:5001` by default. Its health endpoint is `http://localhost:5001/api/health`.
+
+### 2. Configure and start the frontend
+
+Open another terminal from the repository root:
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+```
+
+The local `frontend/.env` should contain:
+
+```env
+VITE_API_URL=http://localhost:5001/api
+```
+
+Start the Vite development server:
+
+```bash
+npm run dev
+```
+
+Vite prints the local frontend URL in the terminal (normally `http://localhost:5173`). The backend's `FRONTEND_ORIGIN` must match the browser origin exactly.
+
+## Environment Variables
+
+| Variable | Application | Purpose |
+|---|---|---|
+| `PORT` | Backend | Port for the Express server; defaults to `5001` |
+| `MONGO_URI` | Backend | MongoDB connection string |
+| `JWT_SECRET` | Backend | Secret used to sign and validate JWTs |
+| `FRONTEND_ORIGIN` | Backend | Comma-separated list of allowed browser origins |
+| `VITE_API_URL` | Frontend | Backend API base URL; must end in `/api` |
+
+Only example values belong in this README and the tracked `.env.example` files. Store actual secrets and deployment settings in the local untracked `.env` files or the hosting platform's environment configuration.
+
+## Production Configuration and Deployment
+
+Deploy the backend and frontend separately. Configure their environment variables in the respective hosting dashboards; do not commit production credentials.
+
+### Backend
+
+Set the following in the backend hosting environment:
+
+- `NODE_ENV=production`
+- `PORT`: use the port provided by the host, if required by that platform
+- `MONGO_URI`: the production MongoDB Atlas connection string
+- `JWT_SECRET`: a strong, unique production secret
+- `FRONTEND_ORIGIN`: the exact deployed frontend origin, including scheme and host, such as `https://your-frontend.example.com`
+
+In production, `FRONTEND_ORIGIN` is required and every configured origin must use HTTPS. Configure only origins you control. Multiple comma-separated origins are supported for explicitly required production frontends. Localhost and loopback origins are rejected in production configuration. Requests carrying an unapproved browser `Origin` do not receive CORS permission; server-to-server requests without an `Origin` header remain supported.
+
+The server validates the production CORS configuration before connecting to MongoDB or starting to listen. Check startup logs if configuration is rejected.
+
+### Frontend
+
+Set `VITE_API_URL` in the frontend build environment to the deployed backend HTTPS API base URL, ending in `/api`, for example `https://your-backend.example.com/api`.
+
+The production Vite build fails if `VITE_API_URL` is absent, uses HTTP, points to localhost/an IP literal, or does not end in `/api`. The localhost fallback is for local development only. Because Vite embeds this value at build time, trigger a new frontend build after changing the variable.
+
+### Post-deployment checks
+
+After deploying, record the actual URLs in the release/submission notes; do not use placeholder URLs as if they were live.
+
+- Open `https://your-backend.example.com/api/health` using your actual backend hostname and verify a successful health response.
+- Open the deployed frontend and verify its browser requests reach the HTTPS backend without CORS or mixed-content errors.
+- Test registration, login, logout, invalid/expired tokens, protected routes, contact CRUD, ownership isolation, search, company filtering, sorting, pagination, loading/empty/error states, and direct page refreshes.
+- Verify production logs do not reveal credentials or stack traces to clients.
+- Test the responsive UI at mobile, tablet, and desktop widths.
 
 ## Authentication
 
@@ -47,11 +135,9 @@ Authorization: Bearer YOUR_TOKEN
 
 - **JWT validation:** Rejects missing, invalid, expired, tampered, or malformed tokens.
 - **Environment validation:** Requires a non-empty `JWT_SECRET` before server startup.
-- **Payload validation:** Validates user ObjectIds and permits only supported roles.
-- **Password security:** Hashes passwords using `bcryptjs` with salt rounds of 10.
+- **Password security:** Hashes passwords using `bcryptjs`.
 - **Input validation:** Validates required registration fields and email format.
 - **Response sanitization:** Prevents password hashes from being returned to clients.
-- **User enumeration protection:** Uses generic login errors for nonexistent accounts and incorrect passwords.
 - **Privilege escalation prevention:** Registration assigns the `User` role regardless of any client-supplied role.
 
 ## Role-Based Access Control (RBAC)
@@ -65,9 +151,7 @@ Unauthenticated requests are rejected, and users without the required role recei
 
 ## Contact API
 
-Base URL: `/api/contacts`
-
-All contact endpoints require authentication.
+Base URL: `/api/contacts`. Contact endpoints require authentication.
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -81,7 +165,7 @@ All contact endpoints require authentication.
 
 - `name`: Required, non-empty string.
 - `phone`: Required, non-empty string.
-- `email`: Optional; must be a valid email when provided.
+- `email`: Optional; must be valid when provided.
 - `company`: Optional string.
 - `owner`: Assigned from the authenticated user; client-supplied ownership is not trusted.
 
@@ -104,64 +188,49 @@ GET /api/contacts?search=Kabir&company=OpenAI&sortBy=name&order=asc&page=1&limit
 
 The list response contains `contacts` and `pagination` metadata, including `total`, `page`, `limit`, and `totalPages`. Queries with no matches return an empty contact list.
 
-### Contact Security and Ownership
-
-- All contact routes require valid JWT authentication.
-- Users can list and access only their own contacts.
-- Contact ownership is assigned from the authenticated user's identity.
-- Updating a contact cannot change its owner.
-- Attempts to access, update, or delete another user's contact return `404`.
-- Malformed contact IDs return `400`.
-
-### Errors
-
-The API uses appropriate HTTP status codes, including:
-
-- `400`: Invalid input or query parameters.
-- `401`: Missing or invalid authentication.
-- `403`: Insufficient permissions.
-- `404`: Contact not found or not owned by the current user.
-- `500`: Server configuration or internal error.
-
 ## Automated Tests
 
-Run Issue #7 API tests from the `backend` directory:
+### Backend unit/security tests
+
+From `backend/`:
 
 ```bash
 npm test
 ```
 
-This command runs the unit and security tests using Node.js's built-in test runner (`node:test`). Run `npm run test:integration` for the Issue #7 contact API integration tests, or `npm run test:all` to run both suites. The integration tests use Supertest and MongoDB Memory Server for isolated database testing.
+### Backend in-memory integration tests
 
-### Live End-to-End Integration Tests
+From `backend/`:
 
-Run live end-to-end tests against a running MongoDB instance:
+```bash
+npm run test:integration
+```
+
+### Backend live end-to-end tests
+
+From `backend/`:
 
 ```bash
 npm run test:e2e
 ```
 
-- **Prerequisite:** A running MongoDB instance on localhost (`mongodb://127.0.0.1:27017`).
-- **Database Safety & Isolation:** The test suite connects strictly to `cms_e2e_isolated_test_db`. It will never connect to, modify, or drop development or production databases. Upon test completion, only `cms_e2e_isolated_test_db` is dropped.
+This test uses a local MongoDB instance at `mongodb://127.0.0.1:27017` and the isolated database `cms_e2e_isolated_test_db`. Do not repoint this destructive test at a development or production database.
 
+### Frontend tests, lint, and production build
 
-### Authentication and Security Test Coverage
-
-The security tests are located in `backend/src/__tests__/`.
-
-- **`jwtValidation.test.js`:** Tests missing and malformed authorization headers, token signatures, expiration, payload validation, and missing JWT configuration.
-- **`authSecurity.test.js`:** Tests registration validation, duplicate emails, password hashing, login behavior, role escalation prevention, and response sanitization.
-- **`roleAccessControl.test.js`:** Tests role validation, unauthorized access, and protected authentication endpoints.
-- **`contactSecurity.test.js`:** Tests contact authentication, ownership assignment, cross-user isolation, ownership immutability, and contact ID validation.
-- **`testHelper.js`:** Provides shared helpers for security tests.
-
-Run the built-in Node.js tests directly with:
+From `frontend/`:
 
 ```bash
-node --test
+npm test
+npm run lint
+npm run build
 ```
 
-The security test suite uses mocked database behavior for isolated tests. Automated tests do not, by themselves, establish that a live MongoDB Atlas deployment or external network connectivity works.
+A production build requires a valid HTTPS `VITE_API_URL` pointing to the deployed backend API base URL. For local work, the example environment file uses `http://localhost:5001/api`.
+
+## Known Limitations
+
+Company filter discovery is bounded to a maximum of 10 pages (up to 1,000 contacts), as implemented by the current frontend. Document any deployment-specific or additional limitations discovered during acceptance testing.
 
 ## Health Check
 
@@ -169,4 +238,4 @@ The security test suite uses mocked database behavior for isolated tests. Automa
 GET /api/health
 ```
 
-Returns the API health status.
+Returns `{ "status": "OK" }`.
