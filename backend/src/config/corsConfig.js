@@ -1,3 +1,5 @@
+const { isIP } = require("node:net");
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function getRawOrigins(value) {
@@ -62,9 +64,14 @@ function validateCorsConfig(env = process.env) {
   if (isProduction) {
     for (const origin of origins) {
       const parsed = new URL(origin);
-      if (parsed.protocol !== "https:" || isLoopbackHost(parsed.hostname)) {
+      const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
+      if (
+        parsed.protocol !== "https:" ||
+        isLoopbackHost(parsed.hostname) ||
+        isIP(hostname)
+      ) {
         throw new Error(
-          "Every production FRONTEND_ORIGIN must be a public HTTPS origin; localhost and loopback origins are not allowed."
+          "Every production FRONTEND_ORIGIN must be a deployed HTTPS hostname; localhost, loopback, and IP-literal origins are not allowed."
         );
       }
     }
