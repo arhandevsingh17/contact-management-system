@@ -1,7 +1,25 @@
+const viteEnv =
+  typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env
+    : {};
+
+const configuredApiUrl =
+  viteEnv.VITE_API_URL ||
+  (typeof globalThis !== 'undefined' &&
+  globalThis.process &&
+  globalThis.process.env &&
+  globalThis.process.env.VITE_API_URL
+    ? globalThis.process.env.VITE_API_URL
+    : '');
+
+if (viteEnv.PROD && !configuredApiUrl) {
+  throw new Error(
+    'VITE_API_URL is required in production. Configure the deployed backend API URL before building or running this frontend.'
+  );
+}
+
 const API_BASE_URL = (
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) ||
-  (typeof globalThis !== 'undefined' && globalThis.process && globalThis.process.env && globalThis.process.env.VITE_API_URL) ||
-  'http://localhost:5001/api'
+  configuredApiUrl || 'http://localhost:5001/api'
 ).replace(/\/+$/, '');
 
 const TOKEN_KEY = 'cms_token';

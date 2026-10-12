@@ -2,10 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const contactRoutes = require("./routes/contactRoutes");
+const { createCorsOptions } = require("./config/corsConfig");
 
 const app = express();
 
-app.use(cors());
+app.use(cors(createCorsOptions()));
 app.use(express.json());
 
 app.get("/", (req, res) => {
