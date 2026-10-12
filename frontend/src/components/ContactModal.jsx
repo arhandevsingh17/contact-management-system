@@ -50,19 +50,23 @@ const ContactModalForm = ({
     };
     if (formData.email.trim()) {
       payload.email = formData.email.trim();
+    } else if (initialData) {
+      payload.email = '';
     }
     if (formData.company.trim()) {
       payload.company = formData.company.trim();
+    } else if (initialData) {
+      payload.company = '';
     }
 
     onSubmit(payload);
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3 className="modal-title">
+          <h3 id="modal-title" className="modal-title">
             {initialData ? 'Edit Contact' : 'Add New Contact'}
           </h3>
           <button
