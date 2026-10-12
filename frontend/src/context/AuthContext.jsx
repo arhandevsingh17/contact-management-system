@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => getStoredToken());
   const [user, setUser] = useState(() => getStoredUser());
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(() => Boolean(getStoredToken()));
 
   const logout = useCallback(() => {
     authService.logout();
@@ -18,9 +19,49 @@ export const AuthProvider = ({ children }) => {
     const handleUnauthorized = () => {
       logout();
     };
-    window.addEventListener('cms:unauthorized', handleUnauthorized);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('cms:unauthorized', handleUnauthorized);
+      return () => {
+        window.removeEventListener('cms:unauthorized', handleUnauthorized);
+      };
+    }
+  }, [logout]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const validateSession = async () => {
+      const storedToken = getStoredToken();
+      if (!storedToken) {
+        if (isMounted) setIsInitializing(false);
+        return;
+      }
+
+      try {
+        const response = await authService.getMe();
+        if (isMounted && response?.user) {
+          setUser((prev) => ({ ...(prev || {}), ...response.user }));
+        }
+      } catch (err) {
+        // Clear stored session and log out only when 401 or token is definitively invalid.
+        // Do not automatically log out on network errors or 5xx server responses.
+        if (err?.status === 401) {
+          if (isMounted) {
+            logout();
+          } else {
+            authService.logout();
+          }
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
+    };
+
+    validateSession();
+
     return () => {
-      window.removeEventListener('cms:unauthorized', handleUnauthorized);
+      isMounted = false;
     };
   }, [logout]);
 
@@ -50,6 +91,7 @@ export const AuthProvider = ({ children }) => {
     user,
     isAuthenticated: Boolean(token),
     loading,
+    isInitializing,
     login,
     register,
     logout,

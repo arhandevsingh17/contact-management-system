@@ -133,6 +133,18 @@ npm test
 
 This command runs the unit and security tests using Node.js's built-in test runner (`node:test`). Run `npm run test:integration` for the Issue #7 contact API integration tests, or `npm run test:all` to run both suites. The integration tests use Supertest and MongoDB Memory Server for isolated database testing.
 
+### Live End-to-End Integration Tests
+
+Run live end-to-end tests against a running MongoDB instance:
+
+```bash
+npm run test:e2e
+```
+
+- **Prerequisite:** A running MongoDB instance on localhost (`mongodb://127.0.0.1:27017`).
+- **Database Safety & Isolation:** The test suite connects strictly to `cms_e2e_isolated_test_db`. It will never connect to, modify, or drop development or production databases. Upon test completion, only `cms_e2e_isolated_test_db` is dropped.
+
+
 ### Authentication and Security Test Coverage
 
 The security tests are located in `backend/src/__tests__/`.

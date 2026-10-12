@@ -87,7 +87,9 @@ export const apiRequest = async (endpoint, options = {}) => {
 
   if (response.status === 401) {
     clearAuthSession();
-    window.dispatchEvent(new CustomEvent('cms:unauthorized'));
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('cms:unauthorized'));
+    }
     const message = (data && data.message) || 'Session expired. Please log in again.';
     const err = new Error(message);
     err.status = 401;
@@ -134,8 +136,37 @@ export const authService = {
 };
 
 export const contactService = {
-  getContacts: () => {
-    return apiRequest('/contacts', {
+  getContacts: (params = {}) => {
+    let endpoint = '/contacts';
+    if (params && typeof params === 'object') {
+      const searchParams = new URLSearchParams();
+
+      if (params.search && typeof params.search === 'string' && params.search.trim()) {
+        searchParams.set('search', params.search.trim());
+      }
+      if (params.company && typeof params.company === 'string' && params.company.trim()) {
+        searchParams.set('company', params.company.trim());
+      }
+      if (params.sortBy && typeof params.sortBy === 'string' && params.sortBy.trim()) {
+        searchParams.set('sortBy', params.sortBy.trim());
+      }
+      if (params.order && typeof params.order === 'string' && params.order.trim()) {
+        searchParams.set('order', params.order.trim());
+      }
+      if (params.page !== undefined && params.page !== null && params.page !== '') {
+        searchParams.set('page', String(params.page));
+      }
+      if (params.limit !== undefined && params.limit !== null && params.limit !== '') {
+        searchParams.set('limit', String(params.limit));
+      }
+
+      const queryString = searchParams.toString();
+      if (queryString) {
+        endpoint += `?${queryString}`;
+      }
+    }
+
+    return apiRequest(endpoint, {
       method: 'GET',
     });
   },

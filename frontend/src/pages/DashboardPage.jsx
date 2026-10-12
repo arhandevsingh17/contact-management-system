@@ -1,21 +1,34 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { contactService } from '../services/api';
 import { ContactModal } from '../components/ContactModal';
-import {
-  extractContacts,
-  filterContacts,
-  getUniqueCompanies,
-} from '../utils/contactHelpers';
+
+const MAX_COMPANY_PAGES = 10; // Bounded multi-page retrieval: up to 10 pages * 100 contacts = 1000 contacts
 
 export const DashboardPage = () => {
   const [contacts, setContacts] = useState([]);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 1,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState({ message: '', type: '' });
 
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
+  const [knownCompanies, setKnownCompanies] = useState([]);
+
+  // Sorting state
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [order, setOrder] = useState('desc');
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -26,42 +39,142 @@ export const DashboardPage = () => {
   const [contactToDelete, setContactToDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
-  const fetchContacts = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await contactService.getContacts();
-      setContacts(extractContacts(data));
-    } catch (err) {
-      setError(err.message || 'Failed to load contacts');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Request race condition prevention
+  const latestRequestId = useRef(0);
+  const isInitialMount = useRef(true);
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  // Reset to page 1 when search, company filter, sorting, or page size changes
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setPage(1);
+  }, [debouncedSearch, companyFilter, sortBy, order, limit]);
+
+  // Fetch unique companies across pages for dropdown suggestions on initial load (bounded by MAX_COMPANY_PAGES)
   useEffect(() => {
     let isMounted = true;
-    const load = async () => {
+
+    const loadAllCompanies = async () => {
       try {
-        const data = await contactService.getContacts();
-        if (isMounted) {
-          setContacts(extractContacts(data));
+        const firstPageData = await contactService.getContacts({ page: 1, limit: 100 });
+        if (!isMounted || !firstPageData) return;
+
+        const collectedCompanies = new Set();
+        (firstPageData.contacts || []).forEach((c) => {
+          if (c.company && c.company.trim()) {
+            collectedCompanies.add(c.company.trim());
+          }
+        });
+
+        const totalPages = firstPageData.pagination?.totalPages || 1;
+        const pagesToFetch = Math.min(totalPages, MAX_COMPANY_PAGES);
+
+        if (pagesToFetch > 1) {
+          const subsequentRequests = [];
+          for (let p = 2; p <= pagesToFetch; p++) {
+            subsequentRequests.push(contactService.getContacts({ page: p, limit: 100 }));
+          }
+
+          const subsequentResponses = await Promise.all(subsequentRequests);
+          if (!isMounted) return;
+
+          subsequentResponses.forEach((res) => {
+            (res?.contacts || []).forEach((c) => {
+              if (c.company && c.company.trim()) {
+                collectedCompanies.add(c.company.trim());
+              }
+            });
+          });
         }
-      } catch (err) {
+
         if (isMounted) {
-          setError(err.message || 'Failed to load contacts');
+          setKnownCompanies((prev) => {
+            const merged = new Set([...prev, ...collectedCompanies]);
+            return Array.from(merged).sort();
+          });
         }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+      } catch {
+        // Non-blocking background fetch
       }
     };
-    load();
+
+    loadAllCompanies();
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // Main data fetch effect - all setState calls happen asynchronously in promise callbacks
+  useEffect(() => {
+    let isCancelled = false;
+    const reqId = ++latestRequestId.current;
+
+    contactService
+      .getContacts({
+        search: debouncedSearch,
+        company: companyFilter,
+        sortBy,
+        order,
+        page,
+        limit,
+      })
+      .then((data) => {
+        if (isCancelled || reqId !== latestRequestId.current) return;
+
+        const fetchedContacts = Array.isArray(data?.contacts) ? data.contacts : [];
+        setContacts(fetchedContacts);
+
+        const pag = data?.pagination || {};
+        const total = typeof pag.total === 'number' ? pag.total : fetchedContacts.length;
+        const totalPages =
+          typeof pag.totalPages === 'number'
+            ? pag.totalPages
+            : Math.ceil(total / limit) || 1;
+
+        setPagination({
+          total,
+          page: typeof pag.page === 'number' ? pag.page : page,
+          limit: typeof pag.limit === 'number' ? pag.limit : limit,
+          totalPages: Math.max(1, totalPages),
+        });
+
+        if (fetchedContacts.length > 0) {
+          setKnownCompanies((prev) => {
+            const set = new Set(prev);
+            fetchedContacts.forEach((c) => {
+              if (c.company && c.company.trim()) {
+                set.add(c.company.trim());
+              }
+            });
+            return Array.from(set).sort();
+          });
+        }
+        setError('');
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (isCancelled || reqId !== latestRequestId.current) return;
+        setError(err.message || 'Failed to load contacts');
+        setLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedSearch, companyFilter, sortBy, order, page, limit, refreshKey]);
 
   const showNotification = (message, type = 'success') => {
     setFeedback({ message, type });
@@ -69,16 +182,6 @@ export const DashboardPage = () => {
       setFeedback({ message: '', type: '' });
     }, 4000);
   };
-
-  // Distinct company list for filter dropdown
-  const uniqueCompanies = useMemo(() => {
-    return getUniqueCompanies(contacts);
-  }, [contacts]);
-
-  // Filtered contacts based on search and company filter
-  const filteredContacts = useMemo(() => {
-    return filterContacts(contacts, searchQuery, companyFilter);
-  }, [contacts, searchQuery, companyFilter]);
 
   const handleOpenAdd = () => {
     setEditingContact(null);
@@ -99,23 +202,16 @@ export const DashboardPage = () => {
     setSubmittingModal(true);
     try {
       if (editingContact) {
-        const response = await contactService.updateContact(editingContact._id, payload);
-        const updated = response.contact || { ...editingContact, ...payload };
-        setContacts((prev) =>
-          prev.map((c) => (c._id === editingContact._id ? updated : c))
-        );
+        await contactService.updateContact(editingContact._id, payload);
         showNotification('Contact updated successfully!');
       } else {
-        const response = await contactService.createContact(payload);
-        const created = response.contact;
-        if (created) {
-          setContacts((prev) => [created, ...prev]);
-        } else {
-          await fetchContacts();
-        }
+        await contactService.createContact(payload);
         showNotification('Contact added successfully!');
+        setPage(1);
       }
       handleCloseModal();
+      setLoading(true);
+      setRefreshKey((k) => k + 1);
     } catch (err) {
       showNotification(err.message || 'Operation failed', 'error');
     } finally {
@@ -137,15 +233,52 @@ export const DashboardPage = () => {
     setDeletingId(id);
     try {
       await contactService.deleteContact(id);
-      setContacts((prev) => prev.filter((c) => c._id !== id));
       showNotification('Contact deleted successfully!');
       setContactToDelete(null);
+
+      // If the deleted contact was the only one on a subsequent page, move back one page
+      if (contacts.length === 1 && page > 1) {
+        setPage((prev) => prev - 1);
+      } else {
+        setLoading(true);
+        setRefreshKey((k) => k + 1);
+      }
     } catch (err) {
       showNotification(err.message || 'Failed to delete contact', 'error');
     } finally {
       setDeletingId(null);
     }
   };
+
+  const handleSortHeader = (field) => {
+    setLoading(true);
+    if (sortBy === field) {
+      setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setOrder('asc');
+    }
+  };
+
+  const handleResetFilters = () => {
+    setLoading(true);
+    setSearchTerm('');
+    setDebouncedSearch('');
+    setCompanyFilter('');
+    setPage(1);
+  };
+
+  const availableCompanies = useMemo(() => {
+    const set = new Set(knownCompanies);
+    if (companyFilter.trim()) {
+      set.add(companyFilter.trim());
+    }
+    return Array.from(set).sort();
+  }, [knownCompanies, companyFilter]);
+
+  const hasActiveFilters = Boolean(searchTerm.trim() || companyFilter.trim());
+  const totalPages = Math.max(1, pagination.totalPages || 1);
+  const totalCount = pagination.total ?? contacts.length;
 
   return (
     <div className="dashboard-container">
@@ -170,18 +303,22 @@ export const DashboardPage = () => {
           className={`alert ${
             feedback.type === 'error' ? 'alert-error' : 'alert-success'
           }`}
+          role="alert"
         >
           {feedback.message}
         </div>
       )}
 
       {error && (
-        <div className="alert alert-error">
+        <div className="alert alert-error" role="alert">
           {error}
           <button
             type="button"
             className="btn btn-sm btn-secondary"
-            onClick={fetchContacts}
+            onClick={() => {
+              setLoading(true);
+              setRefreshKey((k) => k + 1);
+            }}
             style={{ marginLeft: '12px' }}
           >
             Retry
@@ -189,55 +326,110 @@ export const DashboardPage = () => {
         </div>
       )}
 
-      {/* Search and Filters */}
+      {/* Search, Filter, and Sort Controls */}
       <div className="filter-bar">
         <div className="search-box">
           <input
             type="text"
             className="form-input search-input"
             placeholder="Search by name, email, phone, or company..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search contacts"
           />
-          {searchQuery && (
+          {searchTerm && (
             <button
               type="button"
               className="clear-search-btn"
-              onClick={() => setSearchQuery('')}
+              onClick={() => setSearchTerm('')}
               title="Clear search"
+              aria-label="Clear search"
             >
               ×
             </button>
           )}
         </div>
 
-        {uniqueCompanies.length > 0 && (
-          <div className="filter-select-wrapper">
+        <div className="filter-select-wrapper">
+          <select
+            className="form-input select-input"
+            value={companyFilter}
+            onChange={(e) => {
+              setLoading(true);
+              setCompanyFilter(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter by company"
+          >
+            <option value="">
+              All Companies {availableCompanies.length > 0 ? `(${availableCompanies.length})` : ''}
+            </option>
+            {availableCompanies.map((comp) => (
+              <option key={comp} value={comp}>
+                {comp}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="sort-controls">
+          <div className="sort-group">
+            <label htmlFor="sort-by-select" className="control-label">
+              Sort:
+            </label>
             <select
-              className="form-input select-input"
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
+              id="sort-by-select"
+              className="form-input select-input-sm"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort by field"
             >
-              <option value="">All Companies ({uniqueCompanies.length})</option>
-              {uniqueCompanies.map((comp) => (
-                <option key={comp} value={comp}>
-                  {comp}
-                </option>
-              ))}
+              <option value="createdAt">Date Added</option>
+              <option value="name">Name</option>
+              <option value="company">Company</option>
             </select>
           </div>
-        )}
+
+          <div className="sort-group">
+            <label htmlFor="sort-order-select" className="control-label">
+              Order:
+            </label>
+            <select
+              id="sort-order-select"
+              className="form-input select-input-sm"
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              aria-label="Sort order"
+            >
+              <option value="asc">Ascending (A–Z / Oldest)</option>
+              <option value="desc">Descending (Z–A / Newest)</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Main Content Area */}
       {loading ? (
-        <div className="state-card loading-state">
+        <div className="state-card loading-state" aria-live="polite">
           <div className="spinner"></div>
           <p>Loading your contacts...</p>
         </div>
-      ) : filteredContacts.length === 0 ? (
+      ) : contacts.length === 0 ? (
         <div className="state-card empty-state">
-          {contacts.length === 0 ? (
+          {hasActiveFilters ? (
+            <>
+              <h3>No matching contacts</h3>
+              <p>No contacts found matching your current search or filter criteria.</p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleResetFilters}
+                style={{ marginTop: '16px' }}
+              >
+                Reset Filters
+              </button>
+            </>
+          ) : (
             <>
               <h3>No contacts yet</h3>
               <p>You haven&apos;t added any contacts to your address book.</p>
@@ -250,86 +442,175 @@ export const DashboardPage = () => {
                 Add Your First Contact
               </button>
             </>
-          ) : (
-            <>
-              <h3>No matching contacts</h3>
-              <p>No contacts found matching your current search or filter criteria.</p>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setSearchQuery('');
-                  setCompanyFilter('');
-                }}
-                style={{ marginTop: '16px' }}
-              >
-                Reset Filters
-              </button>
-            </>
           )}
         </div>
       ) : (
-        <div className="table-responsive">
-          <table className="contacts-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Company</th>
-                <th className="actions-header">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredContacts.map((contact) => (
-                <tr key={contact._id}>
-                  <td className="col-name">
-                    <strong>{contact.name}</strong>
-                  </td>
-                  <td className="col-phone">
-                    <a href={`tel:${contact.phone}`} className="contact-link">
-                      {contact.phone}
-                    </a>
-                  </td>
-                  <td className="col-email">
-                    {contact.email ? (
-                      <a href={`mailto:${contact.email}`} className="contact-link">
-                        {contact.email}
-                      </a>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="col-company">
-                    {contact.company ? (
-                      <span className="badge badge-company">{contact.company}</span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className="col-actions">
+        <div className="table-wrapper">
+          <div className="table-responsive">
+            <table className="contacts-table" aria-label="Contacts list">
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    aria-sort={
+                      sortBy === 'name'
+                        ? order === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    }
+                  >
                     <button
                       type="button"
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => handleOpenEdit(contact)}
+                      className="sort-header-btn"
+                      onClick={() => handleSortHeader('name')}
+                      aria-label={`Sort by Name${
+                        sortBy === 'name'
+                          ? order === 'asc'
+                            ? ', currently ascending'
+                            : ', currently descending'
+                          : ''
+                      }`}
                     >
-                      Edit
+                      <span>Name</span>
+                      <span className="sort-indicator" aria-hidden="true">
+                        {sortBy === 'name' ? (order === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
                     </button>
+                  </th>
+                  <th scope="col">Phone</th>
+                  <th scope="col">Email</th>
+                  <th
+                    scope="col"
+                    aria-sort={
+                      sortBy === 'company'
+                        ? order === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    }
+                  >
                     <button
                       type="button"
-                      className="btn btn-sm btn-danger"
-                      onClick={() => confirmDelete(contact)}
-                      disabled={deletingId === contact._id}
+                      className="sort-header-btn"
+                      onClick={() => handleSortHeader('company')}
+                      aria-label={`Sort by Company${
+                        sortBy === 'company'
+                          ? order === 'asc'
+                            ? ', currently ascending'
+                            : ', currently descending'
+                          : ''
+                      }`}
                     >
-                      {deletingId === contact._id ? 'Deleting...' : 'Delete'}
+                      <span>Company</span>
+                      <span className="sort-indicator" aria-hidden="true">
+                        {sortBy === 'company' ? (order === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
                     </button>
-                  </td>
+                  </th>
+                  <th scope="col" className="actions-header">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="table-footer">
-            Showing {filteredContacts.length} of {contacts.length} total contacts
+              </thead>
+              <tbody>
+                {contacts.map((contact) => (
+                  <tr key={contact._id}>
+                    <td className="col-name">
+                      <strong>{contact.name}</strong>
+                    </td>
+                    <td className="col-phone">
+                      <a href={`tel:${contact.phone}`} className="contact-link">
+                        {contact.phone}
+                      </a>
+                    </td>
+                    <td className="col-email">
+                      {contact.email ? (
+                        <a href={`mailto:${contact.email}`} className="contact-link">
+                          {contact.email}
+                        </a>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="col-company">
+                      {contact.company ? (
+                        <span className="badge badge-company">{contact.company}</span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="col-actions">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => handleOpenEdit(contact)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => confirmDelete(contact)}
+                        disabled={deletingId === contact._id}
+                      >
+                        {deletingId === contact._id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination and Summary Footer */}
+          <div className="pagination-bar">
+            <div className="pagination-summary">
+              Showing {contacts.length > 0 ? (page - 1) * limit + 1 : 0}–
+              {Math.min(page * limit, totalCount)} of {totalCount} contacts
+            </div>
+
+            <div className="pagination-controls">
+              <div className="page-size-selector">
+                <label htmlFor="limit-select" className="control-label">
+                  Per page:
+                </label>
+                <select
+                  id="limit-select"
+                  className="form-input select-input-xs"
+                  value={limit}
+                  onChange={(e) => setLimit(Number(e.target.value))}
+                  aria-label="Contacts per page"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+
+              <div className="page-navigation">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                  aria-label="Previous page"
+                >
+                  ‹ Prev
+                </button>
+                <span className="page-indicator">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || loading}
+                  aria-label="Next page"
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -350,9 +631,10 @@ export const DashboardPage = () => {
           onClick={cancelDelete}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="delete-dialog-title"
         >
           <div className="modal-card modal-confirm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Delete Contact</h3>
+            <h3 id="delete-dialog-title" className="modal-title">Delete Contact</h3>
             <p style={{ margin: '16px 0', color: 'var(--text)' }}>
               Are you sure you want to delete <strong>{contactToDelete.name}</strong>?
               This action cannot be undone.

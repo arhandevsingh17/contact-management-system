@@ -2,7 +2,16 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export const ProtectedRoute = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
+
+  if (isInitializing) {
+    return (
+      <div className="state-card loading-state">
+        <div className="spinner"></div>
+        <p>Verifying session...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -12,7 +21,16 @@ export const ProtectedRoute = () => {
 };
 
 export const PublicRoute = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
+
+  if (isInitializing) {
+    return (
+      <div className="state-card loading-state">
+        <div className="spinner"></div>
+        <p>Verifying session...</p>
+      </div>
+    );
+  }
 
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;

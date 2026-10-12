@@ -8,6 +8,7 @@
     "dev": "node --watch src/server.js",
     "test": "node --test src/__tests__/*.test.js",
     "test:integration": "node --test tests/contact.test.js",
+    "test:e2e": "node --test tests/live_integration.test.js",
     "test:all": "npm test && npm run test:integration"
   },
   "keywords": [],
